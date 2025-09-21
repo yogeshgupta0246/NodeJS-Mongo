@@ -1,0 +1,28 @@
+# ---------- Stage 1: Build ----------
+FROM node:13-alpine AS build
+
+WORKDIR /home/app
+
+# Copy only package files first for better caching
+COPY ./app/package*.json ./
+
+# Install dependencies
+RUN npm install --production
+
+# Copy the rest of the source code
+COPY ./app .
+
+# ---------- Stage 2: Runtime ----------
+FROM node:13-alpine AS runtime
+
+WORKDIR /home/app
+
+# Copy app and dependencies from build stage
+COPY --from=build /home/app /home/app
+
+# Set runtime environment variables (only here)
+ENV MONGO_DB_USERNAME=admin \
+    MONGO_DB_PWD=password
+
+# Run the app
+CMD ["node", "server.js"]
