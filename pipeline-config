@@ -1,0 +1,64 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = "myapp"
+        IMAGE_TAG  = "1.0.0"
+        DOCKER_CONTENT_TRUST = "1"
+    }
+
+    stages {
+        stage('Trivy Dockerfile Scan') {
+            steps {
+                script {
+                    sh '''
+                      # Install Trivy if missing
+                      if ! command -v trivy > /dev/null; then
+                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh
+                         mkdir -p $HOME/bin
+                         mv ./bin/trivy $HOME/bin/
+                         export PATH=$HOME/bin:$PATH
+                      fi
+
+                      echo "🔍 Scanning Dockerfile with Trivy..."
+                      cd $WORKSPACE
+                      trivy config --exit-code 1 --severity HIGH,CRITICAL .
+                    '''
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh  '''
+                    cd $WORKSPACE
+                     docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+
+                     '''
+                    
+                }
+            }
+        }
+
+        stage('Dockle Scan') {
+            steps {
+                script {
+                    sh '''
+                      echo "🔍 Scanning built image with Dockle..."
+                      dockle --exit-code 1 ${IMAGE_NAME}:${IMAGE_TAG}
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "✅ Pipeline finished."
+        }
+        failure {
+            echo "❌ Security scan failed. Fix vulnerabilities or misconfigurations."
+        }
+    }
+}                                                                                                               
